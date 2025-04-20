@@ -1,34 +1,60 @@
 import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
+import { useNavigate } from 'react-router-dom';
+import { useEffect } from 'react'
 import './App.css'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [walletAddress, setWalletAddress] = useState(null);
+  const [credentials, setCredentials] = useState(null);
+  const navigate = useNavigate();
+
+  const connectWallet = async () => {
+    if (window.ethereum) {
+      try {
+        const accounts = await window.ethereum.request({
+          method: 'eth_requestAccounts',
+        });
+        setWalletAddress(accounts[0]);
+        console.log('Connected wallet:', accounts[0]);
+      } catch (err) {
+        console.error('User rejected wallet connection', err);
+      }
+    } else {
+      alert('Please install MetaMask!');
+    }
+  };
+
+  const getCredentials = () => {
+    // Placeholder for your credential logic
+    //navigate('/get-credentials');
+    alert('Credentials fetched (simulate)');
+  };
 
   return (
     <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
+     
+    <div className="card">
+      <h1>Petition System</h1>
       <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
+        <button onClick={connectWallet}>
+          {walletAddress ? `Wallet Connected : ${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}` : 'Connect Wallet'}
         </button>
         <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
+          Step 1 : Please connect metamask wallet to enter petition system
         </p>
       </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
+      <div className="card">
+        <button onClick={getCredentials}>
+          {credentials ? `Got Credentials` : 'Get Credentials'}
+        </button>
+        <p>
+        Step 2 : Get credentials to sign/create petition
+        </p>
+      </div>
+      </div>
+
     </>
+    
   )
 }
 

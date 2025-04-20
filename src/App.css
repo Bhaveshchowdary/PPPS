@@ -3,6 +3,7 @@
   margin: 0 auto;
   padding: 2rem;
   text-align: center;
+  color: black;
 }
 
 .logo {
@@ -34,9 +35,32 @@
 }
 
 .card {
-  padding: 2em;
+  background-color: #fff;
+  padding: 2rem;
+  border-radius: 1rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  max-width: 400px;
+
 }
 
-.read-the-docs {
+button {
+  background-color: #646cff;
+  border: none;
+  color: white;
+  padding: 0.75rem 1.25rem;
+  font-size: 1rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  margin-top: 1rem;
+  transition: background-color 0.2s ease;
+  
+}
+
+button:hover {
+  background-color: #4c52e1;
+}
+
+.getCredentials {
   color: #888;
 } 
