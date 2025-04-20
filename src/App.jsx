@@ -26,8 +26,8 @@ function App() {
 
   const getCredentials = () => {
     // Placeholder for your credential logic
-    //navigate('/get-credentials');
-    alert('Credentials fetched (simulate)');
+    navigate('/home');
+    // alert('Credentials fetched (simulate)');
   };
 
   return (
