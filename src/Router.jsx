@@ -7,6 +7,7 @@ import CreatePetetion from './pages/Create_petetion';
 import Profile from './pages/Profile';
 import SignedPetetions from './pages/Signed_petetions';
 import MyPetetions from './pages/My_petetions';
+import IssueCredentials from "./pages/IssueCredentials";
 
 function RouterComponent() {
   return (
@@ -19,6 +20,7 @@ function RouterComponent() {
         <Route path="/profile" element={<Profile />} />
         <Route path="/signed-petitions" element={<SignedPetetions />} />
         <Route path="/my-petitions" element={<MyPetetions />} />
+        <Route path="/issue-credentials" element={<IssueCredentials />} />
       </Routes>
     </Router>
   );

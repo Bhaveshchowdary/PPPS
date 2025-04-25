@@ -1,12 +1,12 @@
-// src/components/ConnectWallet.jsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signOut } from "firebase/auth";
-import { auth } from "../firebase";
+import { auth, db } from "../firebase";
+import { getDoc, doc } from "firebase/firestore";
 
 function ConnectWallet() {
   const [walletAddress, setWalletAddress] = useState(null);
-  const [credentials, setCredentials] = useState(null);
+  const [credentials, setCredentials] = useState(false);
   const navigate = useNavigate();
 
   const connectWallet = async () => {
@@ -25,11 +25,40 @@ function ConnectWallet() {
     }
   };
 
-  const getCredentials = () => {
-    // Placeholder for your credential logic
-    setCredentials(true);
-    navigate('/home'); // If you're navigating to petition form or dashboard
+  const getCredentials = async () => {
+    const userId = auth.currentUser?.uid;
+
+    if (userId) {
+      const credentialsRef = doc(db, "credentials", userId);
+      const docSnap = await getDoc(credentialsRef);
+
+      // If credentials don't exist, navigate to issue-credentials page
+      if (!docSnap.exists()) {
+        navigate('/issue-credentials');
+      } else {
+        // If credentials already exist, set the credentials flag to true and show Home button
+        setCredentials(true);
+        navigate('/home');
+      }
+    }
   };
+
+  useEffect(() => {
+    // Check if user is already logged in and credentials are issued
+    const checkCredentials = async () => {
+      const userId = auth.currentUser?.uid;
+      if (userId) {
+        const credentialsRef = doc(db, "credentials", userId);
+        const docSnap = await getDoc(credentialsRef);
+
+        if (docSnap.exists()) {
+          setCredentials(true); // Set credentials if already exist
+        }
+      }
+    };
+
+    checkCredentials();
+  }, [auth.currentUser]);
 
   return (
     <div className="card">
@@ -51,9 +80,9 @@ function ConnectWallet() {
 
       <div className="card">
         <button onClick={getCredentials}>
-          {credentials ? 'Got Credentials' : 'Get Credentials'}
+          {credentials ? 'Go to Home' : 'Get Credentials'}
         </button>
-        <p>Get credentials to sign/create petition</p>
+        <p>{credentials ? 'You already have credentials. Proceed to home.' : 'Get credentials to sign/create petition'}</p>
       </div>
     </div>
   );
