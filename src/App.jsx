@@ -1,61 +1,29 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom';
-import { useEffect } from 'react'
-import './App.css'
+// src/App.jsx
+import { useEffect, useState } from "react";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "./firebase";
+import LoginSignUp from "./components/LoginSignUp";
+import ConnectWallet from "./components/ConnectWallet";
 
 function App() {
-  const [walletAddress, setWalletAddress] = useState(null);
-  const [credentials, setCredentials] = useState(null);
-  const navigate = useNavigate();
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const connectWallet = async () => {
-    if (window.ethereum) {
-      try {
-        const accounts = await window.ethereum.request({
-          method: 'eth_requestAccounts',
-        });
-        setWalletAddress(accounts[0]);
-        console.log('Connected wallet:', accounts[0]);
-      } catch (err) {
-        console.error('User rejected wallet connection', err);
-      }
-    } else {
-      alert('Please install MetaMask!');
-    }
-  };
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUser(user);
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
 
-  const getCredentials = () => {
-    // Placeholder for your credential logic
-    navigate('/home');
-    // alert('Credentials fetched (simulate)');
-  };
+  if (loading) return <p className="text-center mt-20">Loading...</p>;
 
   return (
-    <>
-     
-    <div className="card">
-      <h1>Petition System</h1>
-      <div className="card">
-        <button onClick={connectWallet}>
-          {walletAddress ? `Wallet Connected : ${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}` : 'Connect Wallet'}
-        </button>
-        <p>
-          Step 1 : Please connect metamask wallet to enter petition system
-        </p>
-      </div>
-      <div className="card">
-        <button onClick={getCredentials}>
-          {credentials ? `Got Credentials` : 'Get Credentials'}
-        </button>
-        <p>
-        Step 2 : Get credentials to sign/create petition
-        </p>
-      </div>
-      </div>
-
-    </>
-    
-  )
+    <div className="min-h-screen bg-gray-100">
+      {user ? <ConnectWallet /> : <LoginSignUp />}
+    </div>
+  );
 }
 
-export default App
+export default App;
