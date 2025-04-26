@@ -19,7 +19,7 @@ function RouterComponent() {
         <Route path="/create-petition" element={<CreatePetetion />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/signed-petitions" element={<SignedPetetions />} />
-        <Route path="/my-petitions" element={<MyPetetions />} />
+        <Route path="/created-petitions" element={<MyPetetions />} />
         <Route path="/issue-credentials" element={<IssueCredentials />} />
       </Routes>
     </Router>
