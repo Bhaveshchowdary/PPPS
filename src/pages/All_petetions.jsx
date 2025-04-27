@@ -1,71 +1,115 @@
 import { useEffect, useState } from "react";
 import { db } from "../firebase";
-import { collection, getDocs, updateDoc, doc, increment } from "firebase/firestore";
+import { collection, getDocs, updateDoc, doc, arrayUnion } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 
 function AllPetitions() {
-  const [petitions, setPetitions] = useState([]);
-  const [voted, setVoted] = useState(() => {
-    const stored = localStorage.getItem("votedPetitions");
-    return stored ? JSON.parse(stored) : [];
-  });
-
+  const [activePetitions, setActivePetitions] = useState([]);
+  const [completedPetitions, setCompletedPetitions] = useState([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalData, setModalData] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     const fetchPetitions = async () => {
       try {
-        const querySnapshot = await getDocs(collection(db, "petitions"));
-        const data = querySnapshot.docs.map((doc) => ({
+        // Fetch all petitions
+        const petitionsRef = collection(db, "petitions");
+        const querySnapshot = await getDocs(petitionsRef);
+
+        const petitionsData = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
-        setPetitions(data);
-      } catch (err) {
-        alert("Error fetching petitions. Check console.");
-        console.error("Error:", err);
+
+        // Separate active and completed petitions
+        const active = petitionsData.filter(petition => petition.active);
+        const completed = petitionsData.filter(petition => !petition.active);
+
+        setActivePetitions(active);
+        setCompletedPetitions(completed);
+      } catch (error) {
+        console.error("Error fetching petitions:", error);
+        alert("Failed to load petitions.");
       }
     };
 
     fetchPetitions();
   }, []);
 
-  const hasVoted = (petitionId) => voted.includes(petitionId);
+  const handlePetitionClick = (petition) => {
+    let statusMessage = "";
 
-  const vote = async (petitionId, option) => {
-    if (hasVoted(petitionId)) {
-      alert("You have already signed this petition. You can't sign a petition twice!");
-      return;
-    }
+    if (!petition.active) {
+      const approveVotes = petition.votes?.Approve || 0;
+      const disapproveVotes = petition.votes?.Disapprove || 0;
 
-    try {
-      const petitionRef = doc(db, "petitions", petitionId);
-      await updateDoc(petitionRef, {
-        [`votes.${option}`]: increment(1)
+      if (approveVotes > disapproveVotes) {
+        statusMessage = "This petition has been approved.";
+      } else if (approveVotes < disapproveVotes) {
+        statusMessage = "This petition has been disapproved.";
+      } else {
+        statusMessage = "This petition is tied (Approve and Disapprove votes are equal).";
+      }
+
+      setModalData({
+        message: statusMessage,
+        results: null
       });
-
-      setVoted((prev) => {
-        const updated = [...prev, petitionId];
-        localStorage.setItem("votedPetitions", JSON.stringify(updated));
-        return updated;
-      });
-
-      alert("Vote cast successfully!");
-    } catch (err) {
-      console.error("Error voting:", err);
-      alert("Failed to cast vote.");
+      setIsModalOpen(true);
     }
   };
 
-  const activePetitions = petitions.filter((p) => p.active);
-  const completedPetitions = petitions.filter((p) => !p.active);
+  // Function to handle approve/disapprove action
+  const handleVote = async (petition, voteType) => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+
+    if (!user) {
+      alert("You must be logged in to vote.");
+      return;
+    }
+
+    // Check if the user has already signed the petition
+    if (petition.signedBy && petition.signedBy.includes(user.uid)) {
+      alert("You have already signed this petition.");
+      return;
+    }
+
+    // Add user to signedBy and update the vote count
+    const petitionRef = doc(db, "petitions", petition.id);
+    await updateDoc(petitionRef, {
+      signedBy: arrayUnion(user.uid), // Add user to signedBy array
+      [`votes.${voteType}`]: (petition.votes?.[voteType] || 0) + 1 // Increment the vote
+    });
+
+    // Update the local state to reflect the change immediately
+    setActivePetitions(prevPetitions =>
+      prevPetitions.map(pet =>
+        pet.id === petition.id
+          ? { ...pet, votes: { ...pet.votes, [voteType]: (pet.votes?.[voteType] || 0) + 1 }, signedBy: [...(pet.signedBy || []), user.uid] }
+          : pet
+      )
+    );
+
+    // Show confirmation alert
+    alert(`You have ${voteType === "Approve" ? "approved" : "disapproved"} the petition.`);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setModalData(null);
+  };
 
   return (
     <div style={{ maxWidth: "600px", margin: "0 auto", textAlign: "left" }}>
-      <h2 style={{ textAlign: "center", marginBottom: "1rem" }}>Active Petitions</h2>
+      <h2 style={{ textAlign: "center", marginBottom: "1rem" }}>All Petitions</h2>
 
+      {/* Active Petitions */}
+      <h3>Active Petitions</h3>
       {activePetitions.length === 0 ? (
-        <p>No active petitions.</p>
+        <p>No active petitions available.</p>
       ) : (
         <ul style={{ listStyle: "none", padding: 0 }}>
           {activePetitions.map((petition) => (
@@ -75,39 +119,41 @@ function AllPetitions() {
                   marginBottom: "0.5rem",
                   padding: "1rem",
                   borderRadius: "0.75rem",
-                  background: "#e0f7fa",
+                  background: "#f0f0f0",
                   fontWeight: "bold",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  flexWrap: "wrap"
+                  cursor: "pointer"
                 }}
+                onClick={() => handlePetitionClick(petition)} // Handle petition click
               >
-                <div>{petition.title}</div>
-                <div style={{ display: "flex", gap: "0.5rem" }}>
-                  <button
-                    onClick={() => vote(petition.id, "Approve")}
-                    disabled={hasVoted(petition.id)}
-                  >
-                    Approve
-                  </button>
-                  <button
-                    onClick={() => vote(petition.id, "Disapprove")}
-                    disabled={hasVoted(petition.id)}
-                  >
-                    Disapprove
-                  </button>
-                </div>
+                {petition.title}
+                {/* Show approval/disapproval buttons if not signed */}
+                {!petition.signedBy || !petition.signedBy.includes(getAuth().currentUser?.uid) ? (
+                  <div style={{ marginTop: "1rem" }}>
+                    <button
+                      onClick={() => handleVote(petition, "Approve")}
+                      style={{ marginRight: "10px" }}
+                    >
+                      Approve
+                    </button>
+                    <button onClick={() => handleVote(petition, "Disapprove")}>
+                      Disapprove
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ marginTop: "1rem", color: "green" }}>
+                    <strong>You have already signed this petition.</strong>
+                  </div>
+                )}
               </div>
             </li>
           ))}
         </ul>
       )}
 
-      <h2 style={{ textAlign: "center", margin: "2rem 0 1rem" }}>Completed Petitions</h2>
-
+      {/* Completed Petitions */}
+      <h3>Completed Petitions</h3>
       {completedPetitions.length === 0 ? (
-        <p>No completed petitions yet.</p>
+        <p>No completed petitions available.</p>
       ) : (
         <ul style={{ listStyle: "none", padding: 0 }}>
           {completedPetitions.map((petition) => (
@@ -118,8 +164,10 @@ function AllPetitions() {
                   padding: "1rem",
                   borderRadius: "0.75rem",
                   background: "#f0f0f0",
-                  fontWeight: "bold"
+                  fontWeight: "bold",
+                  cursor: "pointer"
                 }}
+                onClick={() => handlePetitionClick(petition)} // Handle petition click
               >
                 {petition.title}
               </div>
@@ -128,12 +176,54 @@ function AllPetitions() {
         </ul>
       )}
 
-      {/* Go to Home Button */}
+      {/* Modal */}
+      {isModalOpen && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modalContent}>
+            <h3>{modalData.message || "Petition Results"}</h3>
+            {modalData.results && <div>{modalData.results}</div>}
+            <button style={styles.closeButton} onClick={closeModal}>Close</button>
+          </div>
+        </div>
+      )}
+
       <div style={{ textAlign: "center", marginTop: "2rem" }}>
         <button onClick={() => navigate("/home")}>Go to Home</button>
       </div>
     </div>
   );
 }
+
+const styles = {
+  modalOverlay: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1000,
+  },
+  modalContent: {
+    backgroundColor: "white",
+    padding: "2rem",
+    borderRadius: "8px",
+    maxWidth: "500px",
+    width: "100%",
+    textAlign: "center",
+  },
+  closeButton: {
+    marginTop: "1rem",
+    padding: "0.5rem 1rem",
+    backgroundColor: "#ff5722",
+    color: "white",
+    border: "none",
+    borderRadius: "5px",
+    cursor: "pointer",
+  },
+};
 
 export default AllPetitions;

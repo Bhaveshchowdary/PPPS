@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { db } from "../firebase";
 import { collection, getDocs, updateDoc, doc } from "firebase/firestore";
 import { useNavigate, useLocation } from "react-router-dom";
+import { query, where } from "firebase/firestore"; // you need these!
+import { getAuth } from "firebase/auth";
+
 
 function CreatedPetitions() {
   const [petitions, setPetitions] = useState([]);
@@ -13,7 +16,19 @@ function CreatedPetitions() {
   useEffect(() => {
     const fetchPetitions = async () => {
       try {
-        const querySnapshot = await getDocs(collection(db, "petitions"));
+        const auth = getAuth();
+        const user = auth.currentUser;
+  
+        if (!user) {
+          console.error("No user logged in");
+          return;
+        }
+  
+        const q = query(
+          collection(db, "petitions"),
+          where("createdBy", "==", user.uid) // or user.email if you're storing email
+        );
+        const querySnapshot = await getDocs(q);
         const data = querySnapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data()
@@ -25,7 +40,7 @@ function CreatedPetitions() {
         console.error("Error:", err);
       }
     };
-
+  
     fetchPetitions();
   }, []);
 
@@ -79,7 +94,7 @@ function CreatedPetitions() {
                   marginBottom: "0.5rem",
                   padding: "1rem",
                   borderRadius: "0.75rem",
-                  background: "#f0f0f0",
+                  background: "#e0f7fa",
                   fontWeight: "bold"
                 }}
               >

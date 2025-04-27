@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
 
 function CreatePetition() {
   const [title, setTitle] = useState("");
@@ -10,6 +11,14 @@ function CreatePetition() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const auth = getAuth();
+    const user = auth.currentUser;
+
+    if (!user) {
+      alert("You must be logged in to create a petition.");
+      return;
+    }
 
     // Static options: Approve and Disapprove
     const options = ["Approve", "Disapprove"];
@@ -23,8 +32,9 @@ function CreatePetition() {
         options,  // Static options
         active: true,
         createdAt: serverTimestamp(),
-        createdBy: "", // add wallet/publicKey later
-        votes: initialVotes
+        createdBy: user.uid, // Creator's UID
+        votes: initialVotes,
+        signedBy: [] // <-- Added signedBy array
       });
 
       alert("Petition created successfully!");
@@ -44,7 +54,7 @@ function CreatePetition() {
 
         {/* Back Button */}
         <button
-          onClick={() => navigate("/home")} // Navigate back to the home page
+          onClick={() => navigate("/home")}
           style={{
             padding: "0.5rem 1rem",
             marginBottom: "1rem",
@@ -95,7 +105,16 @@ function CreatePetition() {
             />
           </div>
 
-          <button type="submit">Create Petition</button>
+          <button type="submit" style={{
+            padding: "0.5rem 1rem",
+            backgroundColor: "#2196F3",
+            color: "white",
+            border: "none",
+            borderRadius: "0.5rem",
+            cursor: "pointer",
+          }}>
+            Create Petition
+          </button>
         </form>
       </div>
     </div>
