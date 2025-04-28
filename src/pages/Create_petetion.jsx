@@ -1,8 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
+import { ethers } from "ethers";
+
+import PetitionContractABI from "../abis/PetitionContract.json"; 
+const CONTRACT_ADDRESS = "0xEdb38dD83c44e7b5f5eF407C2492CCd0DF1A6799"; 
 
 function CreatePetition() {
   const [title, setTitle] = useState("");
@@ -26,16 +30,34 @@ function CreatePetition() {
     options.forEach((opt) => (initialVotes[opt] = 0));
 
     try {
-      await addDoc(collection(db, "petitions"), {
+      // Step 1: Add document to Firestore
+      const docRef = await addDoc(collection(db, "petitions"), {
         title,
         description,
         options,  // Static options
         active: true,
         createdAt: serverTimestamp(),
-        createdBy: user.uid, // Creator's UID
+        createdBy: user.uid,
         votes: initialVotes,
-        signedBy: [] // <-- Added signedBy array
+        signedBy: []
       });
+
+      const petitionId = docRef.id;
+      
+      // Step 2: Fetch the newly created document to get real createdAt timestamp
+      const savedDoc = await getDoc(docRef);
+      const petitionData = savedDoc.data();
+
+      // Step 3: Generate the hash
+      const petitionHash = await createPetitionHash({
+        title: petitionData.title,
+        description: petitionData.description,
+        createdAt: petitionData.createdAt,
+        createdBy: petitionData.createdBy,
+      });
+
+      // Step 4: Store the hash on blockchain
+      await storeHashOnBlockchain(petitionId, petitionHash);
 
       alert("Petition created successfully!");
       navigate("/home");
@@ -45,6 +67,39 @@ function CreatePetition() {
       console.error("Error creating petition:", err);
       alert("Failed to create petition.");
     }
+  };
+
+  // Helper: Create petition hash
+  const createPetitionHash = async ({ title, description, createdAt, createdBy }) => {
+    const createdAtString = createdAt instanceof Date
+      ? createdAt.toISOString()
+      : createdAt.toDate().toISOString(); // If Firestore Timestamp
+
+    const toHash = JSON.stringify({
+      title,
+      description,
+      createdAt: createdAtString,
+      createdBy,
+    });
+
+    const petitionHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(toHash));
+    return petitionHash;
+  };
+
+  // Helper: Store hash on blockchain
+  const storeHashOnBlockchain = async (petitionId, petitionHash) => {
+    if (!window.ethereum) {
+      throw new Error("MetaMask is not installed!");
+    }
+
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const signer = provider.getSigner();
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, PetitionContractABI, signer);
+    console.log("Storing hash on blockchain...");
+    const petitionIdBytes32 = ethers.utils.formatBytes32String(petitionId);
+    const tx = await contract.createPetition(petitionIdBytes32, petitionHash);
+    await tx.wait();
+    console.log("Petition hash stored successfully on blockchain!");
   };
 
   return (

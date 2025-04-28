@@ -1,0 +1,157 @@
+[
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "petitionId",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "bytes32",
+				"name": "petitionHash",
+				"type": "bytes32"
+			}
+		],
+		"name": "createPetition",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "bytes32",
+				"name": "petitionId",
+				"type": "bytes32"
+			},
+			{
+				"indexed": false,
+				"internalType": "bytes32",
+				"name": "hash",
+				"type": "bytes32"
+			}
+		],
+		"name": "PetitionCreated",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "bytes32",
+				"name": "petitionId",
+				"type": "bytes32"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "voter",
+				"type": "address"
+			}
+		],
+		"name": "PetitionSigned",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "petitionId",
+				"type": "bytes32"
+			}
+		],
+		"name": "signPetition",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "petitionId",
+				"type": "bytes32"
+			}
+		],
+		"name": "getPetitionHash",
+		"outputs": [
+			{
+				"internalType": "bytes32",
+				"name": "",
+				"type": "bytes32"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "petitionId",
+				"type": "bytes32"
+			}
+		],
+		"name": "getVoters",
+		"outputs": [
+			{
+				"internalType": "address[]",
+				"name": "",
+				"type": "address[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "",
+				"type": "bytes32"
+			}
+		],
+		"name": "petitions",
+		"outputs": [
+			{
+				"internalType": "bytes32",
+				"name": "hash",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "bool",
+				"name": "exists",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "petitionVotes",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+]
