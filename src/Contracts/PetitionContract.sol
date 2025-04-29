@@ -12,11 +12,13 @@ contract PetitionContract {
 
     event PetitionCreated(bytes32 petitionId, bytes32 hash);
     event PetitionSigned(bytes32 petitionId, address voter);
+    bytes32[] public allPetitionIds;
 
     // Store petition hash
     function createPetition(bytes32 petitionId, bytes32 petitionHash) public {
         require(!petitions[petitionId].exists, "Petition already exists");
         petitions[petitionId] = Petition(petitionHash, true);
+        allPetitionIds.push(petitionId);
         emit PetitionCreated(petitionId, petitionHash);
     }
 

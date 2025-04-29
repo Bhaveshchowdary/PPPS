@@ -4,9 +4,10 @@ import { db } from "../firebase";
 import { collection, addDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { ethers } from "ethers";
+import { deleteDoc, doc } from "firebase/firestore";
 
 import PetitionContractABI from "../abis/PetitionContract.json"; 
-const CONTRACT_ADDRESS = "0xEdb38dD83c44e7b5f5eF407C2492CCd0DF1A6799"; 
+const CONTRACT_ADDRESS = "0xcecDF17E8D2af86c97C94BEC082572fcAc777427"; 
 
 function CreatePetition() {
   const [title, setTitle] = useState("");
@@ -55,9 +56,18 @@ function CreatePetition() {
         createdAt: petitionData.createdAt,
         createdBy: petitionData.createdBy,
       });
-
+      console.log(petitionHash);
       // Step 4: Store the hash on blockchain
       await storeHashOnBlockchain(petitionId, petitionHash);
+
+      const isHashVerified = await verifyHashOnBlockchain(petitionId, petitionHash);
+     
+      if (!isHashVerified) {
+        // If the petition is not verified on the blockchain, delete it from Firebase
+        await deleteDoc(doc(db, "petitions", petitionId));
+        alert("Failed to add petition to blockchain. Petition deleted from Firebase.");
+        return;
+      }
 
       alert("Petition created successfully!");
       navigate("/home");
@@ -99,7 +109,34 @@ function CreatePetition() {
     const petitionIdBytes32 = ethers.utils.formatBytes32String(petitionId);
     const tx = await contract.createPetition(petitionIdBytes32, petitionHash);
     await tx.wait();
-    console.log("Petition hash stored successfully on blockchain!");
+    console.log("Petition hash stored successfully on blockchain for id !",petitionIdBytes32);
+  };
+
+  const verifyHashOnBlockchain = async (petitionId, petitionHash) => {
+    if (!window.ethereum) {
+      throw new Error("MetaMask is not installed!");
+    }
+
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const signer = provider.getSigner();
+    console.log("checking if hashes are equal");
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, PetitionContractABI, signer);
+    try {
+      const petitionIdBytes32 = ethers.utils.formatBytes32String(petitionId);
+      console.log("Checking hash for petition ID:", petitionIdBytes32);
+      
+      const storedHash = await contract.getPetitionHash(petitionIdBytes32);
+      console.log("Stored hash on-chain:", storedHash);
+      
+      return storedHash === petitionHash;
+    } catch (err) {
+      if (err.code === "CALL_EXCEPTION") {
+        console.warn("Petition ID not found on-chain.");
+        return false;
+      }
+      console.error("Unexpected error verifying petition:", err);
+      return false;
+    }
   };
 
   return (
