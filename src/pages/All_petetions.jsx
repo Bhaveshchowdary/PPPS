@@ -3,6 +3,10 @@ import { db } from "../firebase";
 import { collection, getDocs, updateDoc, doc, arrayUnion } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
+import { ethers } from "ethers";
+import PetitionContractABI from "../abis/PetitionContract.json"; 
+const CONTRACT_ADDRESS = "0x4c9ad2b2e91085231599d3c3a06a8e1431feeb08"; 
+
 
 function AllPetitions() {
   const [activePetitions, setActivePetitions] = useState([]);
@@ -74,6 +78,23 @@ function AllPetitions() {
     // Check if the user has already signed the petition
     if (petition.signedBy && petition.signedBy.includes(user.uid)) {
       alert("You have already signed this petition.");
+      return;
+    }
+
+    //interact with Blockchain
+    try {
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      await provider.send("eth_requestAccounts", []);
+      const signer = provider.getSigner();
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, PetitionContractABI, signer);
+      const petitionIdBytes = ethers.utils.formatBytes32String(petition.id);
+  
+      const approve = voteType === "Approve";
+      const tx = await contract.signPetition(petitionIdBytes, approve);
+      await tx.wait(); // Wait for transaction to be mined
+    } catch (err) {
+      console.error("Blockchain error:", err);
+      alert("Blockchain vote failed. Try again.");
       return;
     }
 

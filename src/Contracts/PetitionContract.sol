@@ -3,8 +3,11 @@ pragma solidity ^0.8.18;
 
 contract PetitionContract {
     struct Petition {
-        bytes32 hash;
-        bool exists;
+    bytes32 hash;
+    bool exists;
+    address[] voters;
+    uint256 approvedVotes;
+    uint256 disapprovedVotes;
     }
 
     mapping(bytes32 => Petition) public petitions;         // <--- changed uint256 to bytes32
@@ -17,7 +20,13 @@ contract PetitionContract {
     // Store petition hash
     function createPetition(bytes32 petitionId, bytes32 petitionHash) public {
         require(!petitions[petitionId].exists, "Petition already exists");
-        petitions[petitionId] = Petition(petitionHash, true);
+        Petition storage newPetition = petitions[petitionId];
+        newPetition.hash = petitionHash;
+        newPetition.exists = true;
+        newPetition.approvedVotes = 0;
+        newPetition.disapprovedVotes = 0;
+        // voters[] is automatically initialized as empty
+
         allPetitionIds.push(petitionId);
         emit PetitionCreated(petitionId, petitionHash);
     }
@@ -29,16 +38,23 @@ contract PetitionContract {
     }
 
     // Record a vote
-    function signPetition(bytes32 petitionId) public {
+    function signPetition(bytes32 petitionId, bool approve) public {
         require(petitions[petitionId].exists, "Petition does not exist");
-
+        Petition storage petition = petitions[petitionId];
         // Prevent double voting
-        address[] storage voters = petitionVotes[petitionId];
-        for (uint256 i = 0; i < voters.length; i++) {
-            require(voters[i] != msg.sender, "Already signed this petition");
+       
+        for (uint256 i = 0; i < petition.voters.length; i++) {
+            require(petition.voters[i] != msg.sender, "Already voted");
         }
 
-        voters.push(msg.sender);
+        petition.voters.push(msg.sender);
+
+        if (approve) {
+            petition.approvedVotes += 1;
+        } else {
+            petition.disapprovedVotes += 1;
+        }
+
         emit PetitionSigned(petitionId, msg.sender);
     }
 

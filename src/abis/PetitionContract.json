@@ -155,6 +155,16 @@
 				"internalType": "bool",
 				"name": "exists",
 				"type": "bool"
+			},
+			{
+				"internalType": "uint256",
+				"name": "approvedVotes",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "disapprovedVotes",
+				"type": "uint256"
 			}
 		],
 		"stateMutability": "view",
@@ -166,6 +176,11 @@
 				"internalType": "bytes32",
 				"name": "petitionId",
 				"type": "bytes32"
+			},
+			{
+				"internalType": "bool",
+				"name": "approve",
+				"type": "bool"
 			}
 		],
 		"name": "signPetition",
