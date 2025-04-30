@@ -2,14 +2,19 @@ import { useEffect, useState } from "react";
 import { db } from "../firebase";
 import { collection, getDocs, updateDoc, doc } from "firebase/firestore";
 import { useNavigate, useLocation } from "react-router-dom";
-import { query, where } from "firebase/firestore"; // you need these!
+import { query, where } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
+import { ethers } from "ethers";
+import PetitionContractABI from "../abis/PetitionContract.json"; 
+const CONTRACT_ADDRESS = "0x7539b55c328e343c1c9a900d6367d93036ad57e8"; 
 
 function CreatedPetitions() {
   const [petitions, setPetitions] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [publishingId, setPublishingId] = useState(null);
+
   const navigate = useNavigate();
   const location = useLocation();  // Get the current location
 
@@ -46,6 +51,22 @@ function CreatedPetitions() {
 
   const publishResults = async (petitionId) => {
     try {
+      setPublishingId(petitionId);
+
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, PetitionContractABI, signer);
+
+      const petitionIdBytes32 = ethers.utils.formatBytes32String(petitionId);
+
+      // Step 1: Call smart contract to publish results
+      console.log("Petitionid : ",petitionIdBytes32);
+      const tx = await contract.publishResults(petitionIdBytes32);
+      console.log("Publishing results on-chain...");
+      await tx.wait();
+      console.log("Transaction confirmed");
+
+
       await updateDoc(doc(db, "petitions", petitionId), {
         active: false
       });
@@ -57,7 +78,10 @@ function CreatedPetitions() {
       );
       alert("Results published!");
     } catch (err) {
-      console.error("Failed to publish results:", err);
+      console.error("Error publishing results:", err);
+      alert("Failed to publish results. Ensure you're the petition creator.");
+    } finally {
+      setPublishingId(null);
     }
   };
 
