@@ -26,6 +26,19 @@
 				"internalType": "bytes32",
 				"name": "petitionId",
 				"type": "bytes32"
+			}
+		],
+		"name": "PetitionPublished",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "bytes32",
+				"name": "petitionId",
+				"type": "bytes32"
 			},
 			{
 				"indexed": false,
@@ -116,21 +129,16 @@
 		"inputs": [
 			{
 				"internalType": "bytes32",
-				"name": "",
+				"name": "petitionId",
 				"type": "bytes32"
-			},
-			{
-				"internalType": "uint256",
-				"name": "",
-				"type": "uint256"
 			}
 		],
-		"name": "petitionVotes",
+		"name": "isPetitionActive",
 		"outputs": [
 			{
-				"internalType": "address",
+				"internalType": "bool",
 				"name": "",
-				"type": "address"
+				"type": "bool"
 			}
 		],
 		"stateMutability": "view",
@@ -157,6 +165,16 @@
 				"type": "bool"
 			},
 			{
+				"internalType": "bool",
+				"name": "isActive",
+				"type": "bool"
+			},
+			{
+				"internalType": "address",
+				"name": "creator",
+				"type": "address"
+			},
+			{
 				"internalType": "uint256",
 				"name": "approvedVotes",
 				"type": "uint256"
@@ -168,6 +186,19 @@
 			}
 		],
 		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "petitionId",
+				"type": "bytes32"
+			}
+		],
+		"name": "publishResults",
+		"outputs": [],
+		"stateMutability": "nonpayable",
 		"type": "function"
 	},
 	{
