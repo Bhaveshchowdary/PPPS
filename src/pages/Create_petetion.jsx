@@ -7,7 +7,7 @@ import { ethers } from "ethers";
 import { deleteDoc, doc } from "firebase/firestore";
 
 import PetitionContractABI from "../abis/PetitionContract.json"; 
-const CONTRACT_ADDRESS = "0x4c9ad2b2e91085231599d3c3a06a8e1431feeb08"; 
+const CONTRACT_ADDRESS = "0x7539b55c328e343c1c9a900d6367d93036ad57e8"; 
 
 function CreatePetition() {
   const [title, setTitle] = useState("");

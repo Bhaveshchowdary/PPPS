@@ -129,25 +129,6 @@
 		"inputs": [
 			{
 				"internalType": "bytes32",
-				"name": "petitionId",
-				"type": "bytes32"
-			}
-		],
-		"name": "isPetitionActive",
-		"outputs": [
-			{
-				"internalType": "bool",
-				"name": "",
-				"type": "bool"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "bytes32",
 				"name": "",
 				"type": "bytes32"
 			}

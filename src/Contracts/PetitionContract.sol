@@ -21,7 +21,7 @@ contract PetitionContract {
 
     // Store petition hash
     function createPetition(bytes32 petitionId, bytes32 petitionHash) public {
-        require(!petitions[petitionId].isActive, "Petition already exists");
+        require(!petitions[petitionId].exists, "Petition already exists");
         Petition storage newPetition = petitions[petitionId];
         newPetition.hash = petitionHash;
         newPetition.isActive = true;
@@ -46,12 +46,6 @@ contract PetitionContract {
         emit PetitionPublished(petitionId);
     }
 
-    // View whether petition is active
-    function isPetitionActive(bytes32 petitionId) public view returns (bool) {
-        require(petitions[petitionId].isActive, "Petition does not exist");
-        return petitions[petitionId].isActive;
-    }
-
     // Retrieve petition hash
     function getPetitionHash(bytes32 petitionId) public view returns (bytes32) {
         require(petitions[petitionId].exists, "Petition does not exist");
@@ -63,7 +57,6 @@ contract PetitionContract {
         require(petitions[petitionId].isActive, "Petition does not exist");
         Petition storage petition = petitions[petitionId];
         // Prevent double voting
-       
         for (uint256 i = 0; i < petition.voters.length; i++) {
             require(petition.voters[i] != msg.sender, "Already voted");
         }
