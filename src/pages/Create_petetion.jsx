@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../firebase";
-import { collection, addDoc, getDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp,setDoc,doc } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { ethers } from "ethers";
-import { deleteDoc, doc } from "firebase/firestore";
 
-import PetitionContractABI from "../abis/PetitionContract.json"; 
-const CONTRACT_ADDRESS = "0x7539b55c328e343c1c9a900d6367d93036ad57e8"; 
+import PetitionContractABI from "../abis/PetitionContract.json";
+const CONTRACT_ADDRESS = "0x7539b55c328e343c1c9a900d6367d93036ad57e8";
 
 function CreatePetition() {
   const [title, setTitle] = useState("");
@@ -16,7 +15,6 @@ function CreatePetition() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     const auth = getAuth();
     const user = auth.currentUser;
 
@@ -25,126 +23,90 @@ function CreatePetition() {
       return;
     }
 
-    // Static options: Approve and Disapprove
-    const options = ["Approve", "Disapprove"];
-    const initialVotes = {};
-    options.forEach((opt) => (initialVotes[opt] = 0));
-
     try {
-      // Step 1: Add document to Firestore
-      const docRef = await addDoc(collection(db, "petitions"), {
+      const createdAt = new Date(); // Local timestamp to use for hash
+      const options = ["Approve", "Disapprove"];
+      const initialVotes = { Approve: 0, Disapprove: 0 };
+
+      // Step 1: Create hash
+      const hash = await createPetitionHash({
         title,
         description,
-        options,  // Static options
-        active: true,
-        createdAt: serverTimestamp(),
+        createdAt,
         createdBy: user.uid,
-        votes: initialVotes,
-        signedBy: []
       });
 
-      const petitionId = docRef.id;
-      
-      // Step 2: Fetch the newly created document to get real createdAt timestamp
-      const savedDoc = await getDoc(docRef);
-      const petitionData = savedDoc.data();
+      // Step 2: Generate random Firebase-style ID for petition
+      const petitionId = generateRandomId(); // Needed for storing on-chain and Firebase
 
-      // Step 3: Generate the hash
-      const petitionHash = await createPetitionHash({
-        title: petitionData.title,
-        description: petitionData.description,
-        createdAt: petitionData.createdAt,
-        createdBy: petitionData.createdBy,
-      });
-      console.log(petitionHash);
-      // Step 4: Store the hash on blockchain
-      await storeHashOnBlockchain(petitionId, petitionHash);
+      // Step 3: Store hash on-chain
+      await storeHashOnBlockchain(petitionId, hash);
 
-      const isHashVerified = await verifyHashOnBlockchain(petitionId, petitionHash);
-     
-      if (!isHashVerified) {
-        // If the petition is not verified on the blockchain, delete it from Firebase
-        await deleteDoc(doc(db, "petitions", petitionId));
-        alert("Failed to add petition to blockchain. Petition deleted from Firebase.");
+      // Step 4: Verify hash was correctly stored
+      const isVerified = await verifyHashOnBlockchain(petitionId, hash);
+      if (!isVerified) {
+        alert("Failed to verify hash on-chain.");
         return;
       }
 
+      // Step 5: Store petition in Firestore
+      await setDoc(doc(db, "petitions", petitionId), {
+        title,
+        description,
+        createdAt: serverTimestamp(),
+        createdBy: user.uid,
+        options,
+        votes: initialVotes,
+        active: true,
+        signedBy: [],
+        hash,
+      });
+
       alert("Petition created successfully!");
-      navigate("/home");
       setTitle("");
       setDescription("");
+      navigate("/home");
     } catch (err) {
       console.error("Error creating petition:", err);
-      alert("Failed to create petition.");
+      alert("Error creating petition. See console.");
     }
   };
 
-  // Helper: Create petition hash
   const createPetitionHash = async ({ title, description, createdAt, createdBy }) => {
-    const createdAtString = createdAt instanceof Date
-      ? createdAt.toISOString()
-      : createdAt.toDate().toISOString(); // If Firestore Timestamp
-
-    const toHash = JSON.stringify({
-      title,
-      description,
-      createdAt: createdAtString,
-      createdBy,
-    });
-
-    const petitionHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(toHash));
-    return petitionHash;
+    const createdAtString = createdAt.toISOString();
+    const payload = JSON.stringify({ title, description, createdAt: createdAtString, createdBy });
+    return ethers.utils.keccak256(ethers.utils.toUtf8Bytes(payload));
   };
 
-  // Helper: Store hash on blockchain
-  const storeHashOnBlockchain = async (petitionId, petitionHash) => {
-    if (!window.ethereum) {
-      throw new Error("MetaMask is not installed!");
-    }
+  const generateRandomId = () => {
+    return Math.random().toString(36).substring(2, 10);
+  };
 
+  const storeHashOnBlockchain = async (petitionId, hash) => {
+    if (!window.ethereum) throw new Error("MetaMask is not installed.");
     const provider = new ethers.providers.Web3Provider(window.ethereum);
     const signer = provider.getSigner();
     const contract = new ethers.Contract(CONTRACT_ADDRESS, PetitionContractABI, signer);
-    console.log("Storing hash on blockchain...");
     const petitionIdBytes32 = ethers.utils.formatBytes32String(petitionId);
-    const tx = await contract.createPetition(petitionIdBytes32, petitionHash);
+    const tx = await contract.createPetition(petitionIdBytes32, hash);
     await tx.wait();
-    console.log("Petition hash stored successfully on blockchain for id !",petitionIdBytes32);
+    console.log("Stored hash on blockchain:", hash);
   };
 
-  const verifyHashOnBlockchain = async (petitionId, petitionHash) => {
-    if (!window.ethereum) {
-      throw new Error("MetaMask is not installed!");
-    }
-
+  const verifyHashOnBlockchain = async (petitionId, hash) => {
     const provider = new ethers.providers.Web3Provider(window.ethereum);
     const signer = provider.getSigner();
-    console.log("checking if hashes are equal");
     const contract = new ethers.Contract(CONTRACT_ADDRESS, PetitionContractABI, signer);
-    try {
-      const petitionIdBytes32 = ethers.utils.formatBytes32String(petitionId);
-      console.log("Checking hash for petition ID:", petitionIdBytes32);
-      
-      const storedHash = await contract.getPetitionHash(petitionIdBytes32);
-      console.log("Stored hash on-chain:", storedHash);
-      
-      return storedHash === petitionHash;
-    } catch (err) {
-      if (err.code === "CALL_EXCEPTION") {
-        console.warn("Petition ID not found on-chain.");
-        return false;
-      }
-      console.error("Unexpected error verifying petition:", err);
-      return false;
-    }
+    const petitionIdBytes32 = ethers.utils.formatBytes32String(petitionId);
+    const storedHash = await contract.getPetitionHash(petitionIdBytes32);
+    console.log("verifying hash:", hash)
+    return storedHash === hash;
   };
 
   return (
     <div style={{ display: "flex", justifyContent: "center" }}>
       <div className="card" style={{ width: "100%", maxWidth: "600px" }}>
         <h2>Create a Petition</h2>
-
-        {/* Back Button */}
         <button
           onClick={() => navigate("/home")}
           style={{
@@ -197,14 +159,17 @@ function CreatePetition() {
             />
           </div>
 
-          <button type="submit" style={{
-            padding: "0.5rem 1rem",
-            backgroundColor: "#2196F3",
-            color: "white",
-            border: "none",
-            borderRadius: "0.5rem",
-            cursor: "pointer",
-          }}>
+          <button
+            type="submit"
+            style={{
+              padding: "0.5rem 1rem",
+              backgroundColor: "#2196F3",
+              color: "white",
+              border: "none",
+              borderRadius: "0.5rem",
+              cursor: "pointer",
+            }}
+          >
             Create Petition
           </button>
         </form>
