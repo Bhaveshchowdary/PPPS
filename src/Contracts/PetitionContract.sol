@@ -13,7 +13,7 @@ contract PetitionContract {
     }
 
     mapping(bytes32 => Petition) public petitions;         // <--- changed uint256 to bytes32
-    
+
     event PetitionCreated(bytes32 petitionId, bytes32 hash);
     event PetitionSigned(bytes32 petitionId, address voter);
     event PetitionPublished(bytes32 petitionId);
@@ -76,5 +76,9 @@ contract PetitionContract {
     function getVoters(bytes32 petitionId) public view returns (address[] memory) {
         require(petitions[petitionId].exists, "Petition does not exist");
         return petitions[petitionId].voters;
+    }
+
+    function getAllPetitionIds() public view returns (bytes32[] memory) {
+    return allPetitionIds;
     }
 }

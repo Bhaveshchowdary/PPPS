@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { db } from "../firebase";
-import { collection, getDocs, updateDoc, doc, arrayUnion } from "firebase/firestore";
+import { collection, getDocs, updateDoc, doc, arrayUnion ,deleteDoc} from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 import { ethers } from "ethers";
 import PetitionContractABI from "../abis/PetitionContract.json"; 
-const CONTRACT_ADDRESS = "0x7539b55c328e343c1c9a900d6367d93036ad57e8"; 
+const CONTRACT_ADDRESS = "0x160c59da423ff698ce4512941432ee755dc2861b"; 
 
 
 function AllPetitions() {
@@ -13,33 +13,92 @@ function AllPetitions() {
   const [completedPetitions, setCompletedPetitions] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalData, setModalData] = useState(null);
+  const [corruptedPetitionIds, setCorruptedPetitionIds] = useState(new Set());
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchPetitions = async () => {
+    const fetchAndVerifyPetitions = async () => {
       try {
-        // Fetch all petitions
         const petitionsRef = collection(db, "petitions");
         const querySnapshot = await getDocs(petitionsRef);
 
-        const petitionsData = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
+        const petitionsData = querySnapshot.docs.map((docSnap) => ({
+          id: docSnap.id,
+          ...docSnap.data(),
         }));
 
-        // Separate active and completed petitions
-        const active = petitionsData.filter(petition => petition.active);
-        const completed = petitionsData.filter(petition => !petition.active);
+        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        const signer = provider.getSigner();
+        const contract = new ethers.Contract(
+          CONTRACT_ADDRESS,
+          PetitionContractABI,
+          signer
+        );
 
-        setActivePetitions(active);
-        setCompletedPetitions(completed);
-      } catch (error) {
-        console.error("Error fetching petitions:", error);
-        alert("Failed to load petitions.");
+        const onChainIdsBytes32 = await contract.getAllPetitionIds();
+    const onChainIds = onChainIdsBytes32.map(id => ethers.utils.parseBytes32String(id));
+
+    // 2. Firebase vs On-chain count check
+    if (petitionsData.length < onChainIds.length) {
+      alert(`⚠️ Firebase is missing ${onChainIds.length - petitionsData.length} petition(s) that exist on-chain.`);
+    }
+
+    const corruptedIds = new Set();
+    const deletedIds = [];
+
+    // 3. Remove extra petitions in Firebase that are not on-chain
+    for (const petition of petitionsData) {
+      if (!onChainIds.includes(petition.id)) {
+        deletedIds.push(petition.id);
+        await deleteDoc(doc(db, "petitions", petition.id));
       }
-    };
+    }
 
-    fetchPetitions();
+    // 4. Alert if extra (deleted) Firebase petitions found
+    if (deletedIds.length > 0) {
+      alert(`🗑️ ${deletedIds.length} extra petition(s) deleted from Firebase because they no longer exist on-chain:\n\n${deletedIds.join("\n")}`);
+    }
+
+    // 5. Verify hash for the valid remaining petitions
+    for (const petition of petitionsData) {
+      if (deletedIds.includes(petition.id)) continue;
+
+      try {
+        console.log("Verifying petition id:", petition.id);
+        const petitionIdBytes = ethers.utils.formatBytes32String(petition.id);
+        const onChainHash = await contract.getPetitionHash(petitionIdBytes);
+
+        const { title, description, createdBy } = petition;
+        const payload = JSON.stringify({ title, description, createdBy });
+
+        const recomputedHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(payload));
+        console.log(recomputedHash, ":", onChainHash);
+
+        if (recomputedHash !== onChainHash) {
+          corruptedIds.add(petition.id);
+        }
+      } catch (err) {
+        console.error(`Verification error for ${petition.id}:`, err);
+        corruptedIds.add(petition.id);
+      }
+    }
+
+    // 6. Filter and update state
+    setCorruptedPetitionIds(corruptedIds);
+    setActivePetitions(
+      petitionsData.filter((p) => p.active && !corruptedIds.has(p.id) && !deletedIds.includes(p.id))
+    );
+    setCompletedPetitions(
+      petitionsData.filter((p) => !p.active && !corruptedIds.has(p.id) && !deletedIds.includes(p.id))
+    );
+  } catch (error) {
+    console.error("Error fetching petitions:", error);
+    alert("Failed to load petitions.");
+  }
+};
+
+
+    fetchAndVerifyPetitions();
   }, []);
 
   const handlePetitionClick = (petition) => {
@@ -102,7 +161,7 @@ function AllPetitions() {
     const petitionRef = doc(db, "petitions", petition.id);
     await updateDoc(petitionRef, {
       signedBy: arrayUnion(user.uid), // Add user to signedBy array
-      [`votes.${voteType}`]: (petition.votes?.[voteType] || 0) + 1 // Increment the vote
+      ['votes.${voteType}']: (petition.votes?.[voteType] || 0) + 1 // Increment the vote
     });
 
     // Update the local state to reflect the change immediately
@@ -197,6 +256,16 @@ function AllPetitions() {
         </ul>
       )}
 
+    {corruptedPetitionIds.size > 0 && (
+        <section style={{ marginTop: "2rem", color: "red" }}>
+          <h3>Corrupted Petitions Detected</h3>
+          <p>
+            {[...corruptedPetitionIds].length} petition(s) failed hash
+            verification and were excluded from the lists above.
+          </p>
+        </section>
+      )}
+
       {/* Modal */}
       {isModalOpen && (
         <div style={styles.modalOverlay}>
@@ -248,3 +317,5 @@ const styles = {
 };
 
 export default AllPetitions;
+
+

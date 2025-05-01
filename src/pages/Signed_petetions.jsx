@@ -4,6 +4,10 @@ import { collection, getDocs, query, where } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 
+import { ethers } from "ethers";
+import PetitionContractABI from "../abis/PetitionContract.json"; 
+const CONTRACT_ADDRESS = "0x160c59da423ff698ce4512941432ee755dc2861b"; 
+
 function SignedPetitions() {
   const [signedPetitions, setSignedPetitions] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -21,20 +25,52 @@ function SignedPetitions() {
       }
 
       try {
-        // Fetch petitions where user has signed
+        // Fetch signed petitions from Firebase
         const petitionsRef = collection(db, "petitions");
         const q = query(petitionsRef, where("signedBy", "array-contains", user.uid));
         const querySnapshot = await getDocs(q);
 
-        const signedPetitionsData = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
+        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        const signer = provider.getSigner();
+        const contract = new ethers.Contract(CONTRACT_ADDRESS, PetitionContractABI, signer);
 
-        setSignedPetitions(signedPetitionsData);
+        const filteredPetitions = [];
+
+        for (const docSnap of querySnapshot.docs) {
+          const petition = { id: docSnap.id, ...docSnap.data() };
+          const petitionIdBytes32 = ethers.utils.formatBytes32String(petition.id);
+
+          // Verify hash
+          const payload = JSON.stringify({
+            title: petition.title,
+            description: petition.description,
+            createdBy: petition.createdBy,
+          });
+          const recomputedHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(payload));
+          const onChainHash = await contract.getPetitionHash(petitionIdBytes32);
+
+          if (onChainHash !== recomputedHash) {
+            console.warn(`⚠ Petition data tampered: ${petition.id}`);
+            continue; // skip corrupted petition
+          }
+
+          // Verify that user is a real on-chain voter
+          const voters = await contract.getVoters(petitionIdBytes32);
+          const userAddress = await signer.getAddress();
+
+          const hasVoted = voters.map(a => a.toLowerCase()).includes(userAddress.toLowerCase());
+          if (!hasVoted) {
+            console.warn(`⚠ Firebase signedBy corrupted for ${petition.id}`);
+            continue; // skip fake signed entries
+          }
+
+          filteredPetitions.push(petition);
+        }
+
+        setSignedPetitions(filteredPetitions);
       } catch (error) {
-        console.error("Error fetching signed petitions:", error);
-        alert("Failed to load signed petitions.");
+        console.error("Error verifying signed petitions:", error);
+        alert("Failed to verify signed petitions.");
       }
     };
 

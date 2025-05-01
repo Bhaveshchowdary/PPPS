@@ -6,7 +6,7 @@ import { getAuth } from "firebase/auth";
 import { ethers } from "ethers";
 
 import PetitionContractABI from "../abis/PetitionContract.json";
-const CONTRACT_ADDRESS = "0x7539b55c328e343c1c9a900d6367d93036ad57e8";
+const CONTRACT_ADDRESS = "0x160c59da423ff698ce4512941432ee755dc2861b";
 
 function CreatePetition() {
   const [title, setTitle] = useState("");
@@ -24,7 +24,7 @@ function CreatePetition() {
     }
 
     try {
-      const createdAt = new Date(); // Local timestamp to use for hash
+      // const createdAt = new Date(); // Local timestamp to use for hash
       const options = ["Approve", "Disapprove"];
       const initialVotes = { Approve: 0, Disapprove: 0 };
 
@@ -32,7 +32,7 @@ function CreatePetition() {
       const hash = await createPetitionHash({
         title,
         description,
-        createdAt,
+        // createdAt,
         createdBy: user.uid,
       });
 
@@ -53,7 +53,7 @@ function CreatePetition() {
       await setDoc(doc(db, "petitions", petitionId), {
         title,
         description,
-        createdAt: serverTimestamp(),
+        // createdAt: serverTimestamp(),
         createdBy: user.uid,
         options,
         votes: initialVotes,
@@ -72,9 +72,9 @@ function CreatePetition() {
     }
   };
 
-  const createPetitionHash = async ({ title, description, createdAt, createdBy }) => {
-    const createdAtString = createdAt.toISOString();
-    const payload = JSON.stringify({ title, description, createdAt: createdAtString, createdBy });
+  const createPetitionHash = async ({ title, description, createdBy }) => {
+    // const createdAtString = createdAt.toISOString();
+    const payload = JSON.stringify({ title, description, createdBy });
     return ethers.utils.keccak256(ethers.utils.toUtf8Bytes(payload));
   };
 
