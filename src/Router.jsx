@@ -8,6 +8,7 @@ import Profile from './pages/Profile';
 import SignedPetetions from './pages/Signed_petetions';
 import MyPetetions from './pages/My_petetions';
 import IssueCredentials from "./pages/IssueCredentials";
+import ConnectWallet from './components/ConnectWallet';
 
 function RouterComponent() {
   return (
@@ -15,6 +16,7 @@ function RouterComponent() {
       <Routes>
         <Route path="/" element={<App />} />
         <Route path="/home" element={<Home />} />
+        <Route path="/connect" element={<ConnectWallet/>}/>
         <Route path="/all-petitions" element={<AllPetetions />} />
         <Route path="/create-petition" element={<CreatePetetion />} />
         <Route path="/profile" element={<Profile />} />

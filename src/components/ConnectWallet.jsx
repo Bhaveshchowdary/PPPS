@@ -2,12 +2,19 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signOut } from "firebase/auth";
 import { auth, db } from "../firebase";
-import { getDoc, doc } from "firebase/firestore";
+import { getDoc, doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { ethers } from "ethers";
+import VerifyCredContractABI from "../abis/VerifyCred.json";
+
+const CONTRACT_ADDRESS = "0xa292ca76129aa1b3545a79e4870ea2e3a35c783b"; // Replace with actual address
 
 function ConnectWallet() {
   const [walletAddress, setWalletAddress] = useState(null);
   const [credentials, setCredentials] = useState(false);
-  const [showAlert, setShowAlert] = useState(false);  // State to handle alert visibility
+  const [showAlert, setShowAlert] = useState(false);
+  const [uploadedCredentials, setUploadedCredentials] = useState(null);
+  const [uploadedFileName, setUploadedFileName] = useState("");
+  const [fileError, setFileError] = useState(null);
   const navigate = useNavigate();
 
   const connectWallet = async () => {
@@ -26,32 +33,75 @@ function ConnectWallet() {
     }
   };
 
+  const handleFileUpload = (event) => {
+    const file = event.target.files[0];
+
+    if (file && file.type === "application/json") {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const json = JSON.parse(e.target.result);
+          setUploadedCredentials(json);
+          setFileError(null);
+          setUploadedFileName(file.name);
+        } catch (err) {
+          setUploadedCredentials(null);
+          setFileError("Invalid JSON format");
+          setUploadedFileName("");
+        }
+      };
+      reader.readAsText(file);
+    } else {
+      setUploadedCredentials(null);
+      setFileError("Please upload a valid .json file");
+      setUploadedFileName("");
+    }
+  };
+
   const getCredentials = async () => {
-    // If the wallet isn't connected, show the alert
     if (!walletAddress) {
       setShowAlert(true);
       return;
     }
 
-    const userId = auth.currentUser?.uid;
+    if (!uploadedCredentials) {
+      alert("Please upload a valid credential file.");
+      return;
+    }
 
-    if (userId) {
-      const credentialsRef = doc(db, "credentials", userId);
-      const docSnap = await getDoc(credentialsRef);
+    try {
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, VerifyCredContractABI, signer);
 
-      // If credentials don't exist, navigate to issue-credentials page
-      if (!docSnap.exists()) {
-        navigate('/issue-credentials');
-      } else {
-        // If credentials already exist, set the credentials flag to true and show Home button
+      const result = await contract.verifyCredentials(uploadedCredentials);
+
+      if (result === true) {
+        const hash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(JSON.stringify(uploadedCredentials)));
+        const docRef = doc(db, "credentials", hash);
+        const docSnap = await getDoc(docRef);
+
+        if (!docSnap.exists()) {
+          await setDoc(docRef, {
+            issuedAt: serverTimestamp()
+          });
+          console.log("New credential stored.");
+        } else {
+          console.log("Credential already exists. Skipping overwrite.");
+        }
+
         setCredentials(true);
         navigate('/home');
+      } else {
+        alert("Credential verification failed.");
       }
+    } catch (error) {
+      console.error("Error during verification:", error);
+      alert("Verification failed. Check the console for details.");
     }
   };
 
   useEffect(() => {
-    // Check if user is already logged in and credentials are issued
     const checkCredentials = async () => {
       const userId = auth.currentUser?.uid;
       if (userId) {
@@ -59,7 +109,7 @@ function ConnectWallet() {
         const docSnap = await getDoc(credentialsRef);
 
         if (docSnap.exists()) {
-          setCredentials(true); // Set credentials if already exist
+          setCredentials(true);
         }
       }
     };
@@ -71,7 +121,6 @@ function ConnectWallet() {
     <div className="card" style={styles.card}>
       <button
         onClick={() => signOut(auth)}
-        className="absolute top-4 right-4 bg-red-500 text-white px-4 py-2 rounded"
         style={styles.logoutButton}
       >
         Logout
@@ -79,25 +128,50 @@ function ConnectWallet() {
 
       <h1>Petition System</h1>
 
-      <div className="card" style={styles.card}>
+      <div style={styles.card}>
         <button onClick={connectWallet} style={styles.connectButton}>
-          {walletAddress ? `Wallet Connected : ${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}` : 'Connect Wallet'}
+          {walletAddress
+            ? `Wallet Connected: ${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`
+            : 'Connect Wallet'}
         </button>
         <p>Connect MetaMask wallet to enter petition system</p>
       </div>
 
-      <div className="card" style={styles.card}>
-        <button 
+      <div style={styles.card}>
+        <label style={styles.fileLabel}>
+          Upload your credentials
+          <input
+            type="file"
+            accept=".json"
+            onChange={handleFileUpload}
+            style={styles.hiddenInput}
+          />
+        </label>
+        {uploadedFileName && (
+          <p style={{ marginTop: '8px', color: 'green' }}>
+            Uploaded file: <strong>{uploadedFileName}</strong>
+          </p>
+        )}
+        {fileError && <p style={{ color: 'red', marginTop: '8px' }}>{fileError}</p>}
+
+        <button
           onClick={getCredentials}
-          disabled={!walletAddress}
-          style={styles.credentialsButton}
+          disabled={!walletAddress || !uploadedCredentials}
+          style={{
+            ...styles.credentialsButton,
+            backgroundColor: !walletAddress || !uploadedCredentials ? '#ccc' : styles.credentialsButton.backgroundColor,
+            cursor: !walletAddress || !uploadedCredentials ? 'not-allowed' : 'pointer'
+          }}
         >
           {credentials ? 'Go to Home' : 'Get Credentials'}
         </button>
-        <p>{credentials ? 'You already have credentials. Proceed to home.' : 'Get credentials to sign/create petition'}</p>
+        <p>
+          {credentials
+            ? 'You already have credentials. Proceed to home.'
+            : 'Upload your credentials JSON file to continue'}
+        </p>
       </div>
 
-      {/* Alert when user tries to proceed without connecting wallet */}
       {showAlert && (
         <div style={styles.alert}>
           <p>Please connect your wallet to proceed.</p>
@@ -108,7 +182,6 @@ function ConnectWallet() {
   );
 }
 
-// Inline Styles
 const styles = {
   card: {
     padding: '20px',
@@ -143,6 +216,18 @@ const styles = {
     cursor: 'pointer',
     marginTop: '10px',
   },
+  fileLabel: {
+    display: 'inline-block',
+    padding: '10px 20px',
+    backgroundColor: '#6c757d',
+    color: 'white',
+    borderRadius: '5px',
+    cursor: 'pointer',
+    marginBottom: '10px',
+  },
+  hiddenInput: {
+    display: 'none',
+  },
   alert: {
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
     color: 'white',
@@ -153,9 +238,6 @@ const styles = {
     left: '50%',
     transform: 'translateX(-50%)',
     zIndex: '1000',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
     textAlign: 'center',
   },
   closeAlert: {
