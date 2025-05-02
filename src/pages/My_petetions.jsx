@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { db } from "../firebase";
 import { collection, getDocs, updateDoc, doc } from "firebase/firestore";
 import { useNavigate, useLocation } from "react-router-dom";
 import { query, where } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
-
+import { AuthContext } from "../context/AuthContext";
 import { ethers } from "ethers";
 import PetitionContractABI from "../abis/PetitionContract.json"; 
 const CONTRACT_ADDRESS = "0x7539b55c328e343c1c9a900d6367d93036ad57e8"; 
@@ -14,24 +14,22 @@ function CreatedPetitions() {
   const [expandedId, setExpandedId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [publishingId, setPublishingId] = useState(null);
-
+  const { walletAddress, credentialHash } = useContext(AuthContext);
   const navigate = useNavigate();
   const location = useLocation();  // Get the current location
 
   useEffect(() => {
     const fetchPetitions = async () => {
       try {
-        const auth = getAuth();
-        const user = auth.currentUser;
-  
-        if (!user) {
+         
+        if (!walletAddress) {
           console.error("No user logged in");
           return;
         }
   
         const q = query(
           collection(db, "petitions"),
-          where("createdBy", "==", user.uid) // or user.email if you're storing email
+          where("createdBy", "==", credentialHash) // or user.email if you're storing email
         );
         const querySnapshot = await getDocs(q);
         const data = querySnapshot.docs.map((doc) => ({
@@ -60,7 +58,7 @@ function CreatedPetitions() {
       const petitionIdBytes32 = ethers.utils.formatBytes32String(petitionId);
 
       // Step 1: Call smart contract to publish results
-      console.log("Petitionid : ",petitionIdBytes32);
+      console.log("publicshing results for Petitionid : ",petitionIdBytes32);
       const tx = await contract.publishResults(petitionIdBytes32);
       console.log("Publishing results on-chain...");
       await tx.wait();

@@ -10,6 +10,7 @@ contract PetitionContract {
     address[] voters;
     uint256 approvedVotes;
     uint256 disapprovedVotes;
+    uint256 deadline;
     }
 
     mapping(bytes32 => Petition) public petitions;         // <--- changed uint256 to bytes32
@@ -20,7 +21,7 @@ contract PetitionContract {
     bytes32[] public allPetitionIds;
 
     // Store petition hash
-    function createPetition(bytes32 petitionId, bytes32 petitionHash) public {
+    function createPetition(bytes32 petitionId, bytes32 petitionHash, uint256 durationInSeconds) public {
         require(!petitions[petitionId].exists, "Petition already exists");
         Petition storage newPetition = petitions[petitionId];
         newPetition.hash = petitionHash;
@@ -29,6 +30,7 @@ contract PetitionContract {
         newPetition.approvedVotes = 0;
         newPetition.disapprovedVotes = 0;
         newPetition.creator = msg.sender;
+        newPetition.deadline = block.timestamp + durationInSeconds;
         // voters[] is automatically initialized as empty
 
         allPetitionIds.push(petitionId);
@@ -37,14 +39,20 @@ contract PetitionContract {
 
     // Publish results (only creator)
     function publishResults(bytes32 petitionId) public {
-        Petition storage petition = petitions[petitionId];
-        require(petition.exists, "Petition does not exist");
-        require(msg.sender == petition.creator, "Only creator can publish results");
-        require(petition.isActive, "Petition already closed");
+    Petition storage petition = petitions[petitionId];
+    require(petition.exists, "Petition does not exist");
+    require(petition.isActive, "Petition already closed");
 
-        petition.isActive = false;
-        emit PetitionPublished(petitionId);
-    }
+    uint256 totalVotes = petition.approvedVotes + petition.disapprovedVotes;
+
+    require(
+        block.timestamp >= petition.deadline || totalVotes >= 100, // adjust threshold as needed
+        "Too early: need more votes or wait for deadline"
+    );
+
+    petition.isActive = false;
+    emit PetitionPublished(petitionId);
+}
 
     // Retrieve petition hash
     function getPetitionHash(bytes32 petitionId) public view returns (bytes32) {
@@ -70,6 +78,18 @@ contract PetitionContract {
         }
 
         emit PetitionSigned(petitionId, msg.sender);
+    }
+
+    function showResults(bytes32 petitionId) public view returns (bool) {
+        require(petitions[petitionId].exists, "Petition does not exist");
+        require(!petitions[petitionId].isActive, "Petition still running");
+        if(petitions[petitionId].approvedVotes > petitions[petitionId].disapprovedVotes)
+        {
+            return true;
+        }
+        else{
+            return false;
+        }
     }
 
     // Get voters list

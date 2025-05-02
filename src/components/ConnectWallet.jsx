@@ -1,36 +1,38 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { signOut } from "firebase/auth";
-import { auth, db } from "../firebase";
-import { getDoc, doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { useContext, useState,useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { doc,getDoc} from "firebase/firestore";
 import { ethers } from "ethers";
+import { AuthContext } from "../context/AuthContext";
+import { auth,db } from "../firebase";
 import VerifyCredContractABI from "../abis/VerifyCred.json";
 
-const CONTRACT_ADDRESS = "0xa292ca76129aa1b3545a79e4870ea2e3a35c783b"; // Replace with actual address
+const CONTRACT_ADDRESS = "0xa292ca76129aa1b3545a79e4870ea2e3a35c783b";
 
 function ConnectWallet() {
-  const [walletAddress, setWalletAddress] = useState(null);
-  const [credentials, setCredentials] = useState(false);
-  const [showAlert, setShowAlert] = useState(false);
+  const {
+    walletAddress,
+    signInWithEthereum,
+    signOut: siweSignOut,
+    credentials,
+    setCredentials,
+    setCredentialHash,
+  } = useContext(AuthContext);
+
   const [uploadedCredentials, setUploadedCredentials] = useState(null);
   const [uploadedFileName, setUploadedFileName] = useState("");
   const [fileError, setFileError] = useState(null);
+  const [showAlert, setShowAlert] = useState(false);
+
   const navigate = useNavigate();
 
-  const connectWallet = async () => {
-    if (window.ethereum) {
-      try {
-        const accounts = await window.ethereum.request({
-          method: 'eth_requestAccounts',
-        });
-        setWalletAddress(accounts[0]);
-        console.log('Connected wallet:', accounts[0]);
-      } catch (err) {
-        console.error('User rejected wallet connection', err);
-      }
-    } else {
-      alert('Please install MetaMask!');
-    }
+  const handleSIWEConnect = async () => {
+    const address = await signInWithEthereum();
+    if (!address) setShowAlert(true);
+  };
+
+  const handleLogout = async () => {
+    siweSignOut();
+    await firebaseSignOut(auth);
   };
 
   const handleFileUpload = (event) => {
@@ -73,11 +75,14 @@ function ConnectWallet() {
       const provider = new ethers.providers.Web3Provider(window.ethereum);
       const signer = provider.getSigner();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, VerifyCredContractABI, signer);
-
+      console.log("Contacting smart contract ...");
       const result = await contract.verifyCredentials(uploadedCredentials);
 
       if (result === true) {
         const hash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(JSON.stringify(uploadedCredentials)));
+        // Store in context
+        setCredentialHash(hash);
+
         const docRef = doc(db, "credentials", hash);
         const docSnap = await getDoc(docRef);
 
@@ -103,9 +108,8 @@ function ConnectWallet() {
 
   useEffect(() => {
     const checkCredentials = async () => {
-      const userId = auth.currentUser?.uid;
-      if (userId) {
-        const credentialsRef = doc(db, "credentials", userId);
+      if (walletAddress) {
+        const credentialsRef = doc(db, "credentials", hash);
         const docSnap = await getDoc(credentialsRef);
 
         if (docSnap.exists()) {
@@ -114,13 +118,16 @@ function ConnectWallet() {
       }
     };
 
+     // Only run checkCredentials if walletAddress is available
+    if (walletAddress) {
     checkCredentials();
-  }, [auth.currentUser]);
+  }
+  }, [walletAddress]);
 
   return (
     <div className="card" style={styles.card}>
       <button
-        onClick={() => signOut(auth)}
+        onClick={handleLogout}
         style={styles.logoutButton}
       >
         Logout
@@ -129,7 +136,7 @@ function ConnectWallet() {
       <h1>Petition System</h1>
 
       <div style={styles.card}>
-        <button onClick={connectWallet} style={styles.connectButton}>
+        <button onClick={handleSIWEConnect} style={styles.connectButton}>
           {walletAddress
             ? `Wallet Connected: ${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`
             : 'Connect Wallet'}

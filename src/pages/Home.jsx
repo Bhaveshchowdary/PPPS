@@ -29,13 +29,20 @@ function Home() {
         <button onClick={handleLogout}>Logout</button>
         </div>
 
-        <div className="card" style={{ margin: '0 auto' }}>
+        {/* <div className="card" style={{ margin: '0 auto' }}>
         <h2>Welcome to the Petition Dashboard</h2>
         <div style={{ display: 'grid', gap: '1rem', marginTop: '1.5rem' }}>
             <button onClick={() => navigateTo('/all-petitions')}>All Petitions</button>
             <button onClick={() => navigateTo('/signed-petitions')}>Signed Petitions</button>
             <button onClick={() => navigateTo('/create-petition')}>Create Petition</button>
             <button onClick={() => navigateTo('/created-petitions')}>Created Petitions</button>
+        </div>
+        </div> */}
+        <div className="card" style={{ margin: '0 auto' }}>
+        <h2>Welcome to the Petition Dashboard</h2>
+        <div style={{ display: 'grid', gap: '1rem', marginTop: '1.5rem' }}>
+            <button onClick={() => navigateTo('/all-petitions')}>All Petitions</button>
+            <button onClick={() => navigateTo('/create-petition')}>Create Petition</button>
         </div>
         </div>
     </div>

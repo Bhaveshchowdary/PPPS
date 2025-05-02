@@ -1,24 +1,27 @@
-import { useState } from "react";
+import { useContext, useState,useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../firebase";
 import { collection, addDoc, serverTimestamp,setDoc,doc } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
+//import { getAuth } from "firebase/auth";
 import { ethers } from "ethers";
+import { AuthContext } from "../context/AuthContext";
 
 import PetitionContractABI from "../abis/PetitionContract.json";
-const CONTRACT_ADDRESS = "0x160c59da423ff698ce4512941432ee755dc2861b";
+const CONTRACT_ADDRESS = "0xc977f4bf7ca81e3e9f3117353a06cd8814958ad7";
 
 function CreatePetition() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const navigate = useNavigate();
+  const [deadline, setDeadline] = useState("");
+  const [maxVotes, setMaxVotes] = useState("");
+
+  const { walletAddress, credentialHash } = useContext(AuthContext);
+  console.log(walletAddress);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const auth = getAuth();
-    const user = auth.currentUser;
-
-    if (!user) {
+    if (!walletAddress) {
       alert("You must be logged in to create a petition.");
       return;
     }
@@ -33,14 +36,18 @@ function CreatePetition() {
         title,
         description,
         // createdAt,
-        createdBy: user.uid,
+        createdBy: credentialHash,
       });
 
       // Step 2: Generate random Firebase-style ID for petition
       const petitionId = generateRandomId(); // Needed for storing on-chain and Firebase
 
       // Step 3: Store hash on-chain
-      await storeHashOnBlockchain(petitionId, hash);
+      setDeadline(new Date(deadline).toISOString());
+      const deadlineTimestamp = Math.floor(new Date(deadline).getTime() / 1000); // in seconds
+
+      console.log("UNIX timestamp:", deadlineTimestamp);
+      await storeHashOnBlockchain(petitionId, hash, deadlineTimestamp);
 
       // Step 4: Verify hash was correctly stored
       const isVerified = await verifyHashOnBlockchain(petitionId, hash);
@@ -54,12 +61,14 @@ function CreatePetition() {
         title,
         description,
         // createdAt: serverTimestamp(),
-        createdBy: user.uid,
+        createdBy: credentialHash,
         options,
         votes: initialVotes,
         active: true,
         signedBy: [],
         hash,
+        deadline: new Date(deadline).toISOString(), // stored as ISO timestamp
+        maxVotes: parseInt(maxVotes, 10) ,
       });
 
       alert("Petition created successfully!");
@@ -82,15 +91,15 @@ function CreatePetition() {
     return Math.random().toString(36).substring(2, 10);
   };
 
-  const storeHashOnBlockchain = async (petitionId, hash) => {
+  const storeHashOnBlockchain = async (petitionId, hash,deadlineTimestamp) => {
     if (!window.ethereum) throw new Error("MetaMask is not installed.");
     const provider = new ethers.providers.Web3Provider(window.ethereum);
     const signer = provider.getSigner();
     const contract = new ethers.Contract(CONTRACT_ADDRESS, PetitionContractABI, signer);
     const petitionIdBytes32 = ethers.utils.formatBytes32String(petitionId);
-    const tx = await contract.createPetition(petitionIdBytes32, hash);
+    const tx = await contract.createPetition(petitionIdBytes32, hash,deadlineTimestamp);
     await tx.wait();
-    console.log("Stored hash on blockchain:", hash);
+    console.log("Stored hash of id on blockchain:", petitionIdBytes32);
   };
 
   const verifyHashOnBlockchain = async (petitionId, hash) => {
@@ -158,6 +167,42 @@ function CreatePetition() {
               }}
             />
           </div>
+          <div style={{ marginBottom: "1rem" }}>
+            <label style={{ fontWeight: "bold" }}>Voting Deadline</label>
+            <input
+              type="datetime-local"
+              value={deadline}
+              onChange={(e) => setDeadline(e.target.value)}
+              required
+              style={{
+                width: "100%",
+                padding: "0.5rem",
+                marginTop: "0.25rem",
+                borderRadius: "0.5rem",
+                border: "1px solid #ccc"
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: "1rem" }}>
+            <label style={{ fontWeight: "bold" }}>Max Votes</label>
+            <input
+              type="number"
+              value={maxVotes}
+              onChange={(e) => setMaxVotes(e.target.value)}
+              min="1"
+              required
+              style={{
+                width: "100%",
+                padding: "0.5rem",
+                marginTop: "0.25rem",
+                borderRadius: "0.5rem",
+                border: "1px solid #ccc"
+              }}
+              placeholder="E.g. 100 votes"
+            />
+          </div>
+
 
           <button
             type="submit"

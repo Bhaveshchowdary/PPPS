@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { db } from "../firebase";
 import { collection, getDocs, query, where } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
+//import { getAuth } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
+
+import { AuthContext } from "../context/AuthContext";
 
 import { ethers } from "ethers";
 import PetitionContractABI from "../abis/PetitionContract.json"; 
@@ -13,13 +15,11 @@ function SignedPetitions() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalData, setModalData] = useState(null);
   const navigate = useNavigate();
+  const { walletAddress, credentialHash } = useContext(AuthContext);
 
   useEffect(() => {
     const fetchSignedPetitions = async () => {
-      const auth = getAuth();
-      const user = auth.currentUser;
-
-      if (!user) {
+      if (!walletAddress) {
         alert("You must be logged in to view signed petitions.");
         return;
       }
@@ -27,7 +27,7 @@ function SignedPetitions() {
       try {
         // Fetch signed petitions from Firebase
         const petitionsRef = collection(db, "petitions");
-        const q = query(petitionsRef, where("signedBy", "array-contains", user.uid));
+        const q = query(petitionsRef, where("signedBy", "array-contains", credentialHash));
         const querySnapshot = await getDocs(q);
 
         const provider = new ethers.providers.Web3Provider(window.ethereum);
@@ -39,7 +39,7 @@ function SignedPetitions() {
         for (const docSnap of querySnapshot.docs) {
           const petition = { id: docSnap.id, ...docSnap.data() };
           const petitionIdBytes32 = ethers.utils.formatBytes32String(petition.id);
-
+          console.log("checking for petition id : ",petitionIdBytes32);
           // Verify hash
           const payload = JSON.stringify({
             title: petition.title,

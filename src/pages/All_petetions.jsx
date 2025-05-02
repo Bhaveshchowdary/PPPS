@@ -1,19 +1,25 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { db } from "../firebase";
 import { collection, getDocs, updateDoc, doc, arrayUnion ,deleteDoc} from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 import { ethers } from "ethers";
+
+import { AuthContext } from "../context/AuthContext";
+
 import PetitionContractABI from "../abis/PetitionContract.json"; 
-const CONTRACT_ADDRESS = "0x160c59da423ff698ce4512941432ee755dc2861b"; 
+const CONTRACT_ADDRESS = "0xc977f4bf7ca81e3e9f3117353a06cd8814958ad7"; 
 
 
 function AllPetitions() {
   const [activePetitions, setActivePetitions] = useState([]);
   const [completedPetitions, setCompletedPetitions] = useState([]);
+  const [expandedId, setExpandedId] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalData, setModalData] = useState(null);
   const [corruptedPetitionIds, setCorruptedPetitionIds] = useState(new Set());
+  const { walletAddress, credentialHash } = useContext(AuthContext);
+  const [publishingId, setPublishingId] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -101,6 +107,10 @@ function AllPetitions() {
     fetchAndVerifyPetitions();
   }, []);
 
+  const toggleExpand = (id) => {
+    setExpandedId((prev) => (prev === id ? null : id));
+  };
+
   const handlePetitionClick = (petition) => {
     let statusMessage = "";
 
@@ -126,16 +136,13 @@ function AllPetitions() {
 
   // Function to handle approve/disapprove action
   const handleVote = async (petition, voteType) => {
-    const auth = getAuth();
-    const user = auth.currentUser;
-
-    if (!user) {
+    if (!walletAddress) {
       alert("You must be logged in to vote.");
       return;
     }
 
     // Check if the user has already signed the petition
-    if (petition.signedBy && petition.signedBy.includes(user.uid)) {
+    if (petition.signedBy && petition.signedBy.includes(credentialHash)) {
       alert("You have already signed this petition.");
       return;
     }
@@ -150,25 +157,28 @@ function AllPetitions() {
   
       const approve = voteType === "Approve";
       const tx = await contract.signPetition(petitionIdBytes, approve);
+      console.log("signed petition : ",petitionIdBytes);
       await tx.wait(); // Wait for transaction to be mined
-    } catch (err) {
-      console.error("Blockchain error:", err);
-      alert("Blockchain vote failed. Try again.");
-      return;
+    } catch (error) {
+      if (error.message.includes("Already voted")) {
+        alert("You have already voted on this petition.");
+      } else {
+        console.error(error);
+      }
     }
 
     // Add user to signedBy and update the vote count
     const petitionRef = doc(db, "petitions", petition.id);
     await updateDoc(petitionRef, {
-      signedBy: arrayUnion(user.uid), // Add user to signedBy array
-      ['votes.${voteType}']: (petition.votes?.[voteType] || 0) + 1 // Increment the vote
+      signedBy: arrayUnion(credentialHash), // Add user to signedBy array
+      [`votes.${voteType}`]: (petition.votes?.[voteType] || 0) + 1 // Increment the vote
     });
 
     // Update the local state to reflect the change immediately
     setActivePetitions(prevPetitions =>
       prevPetitions.map(pet =>
         pet.id === petition.id
-          ? { ...pet, votes: { ...pet.votes, [voteType]: (pet.votes?.[voteType] || 0) + 1 }, signedBy: [...(pet.signedBy || []), user.uid] }
+          ? { ...pet, votes: { ...pet.votes, [voteType]: (pet.votes?.[voteType] || 0) + 1 }, signedBy: [...(pet.signedBy || []), credentialHash] }
           : pet
       )
     );
@@ -181,6 +191,54 @@ function AllPetitions() {
     setIsModalOpen(false);
     setModalData(null);
   };
+
+  const publishResults = async (petitionId) => {
+    try {
+      setPublishingId(petitionId);
+  
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, PetitionContractABI, signer);
+  
+      const petitionIdBytes32 = ethers.utils.formatBytes32String(petitionId);
+  
+      console.log("Publishing results for Petition ID:", petitionIdBytes32);
+  
+      const tx = await contract.publishResults(petitionIdBytes32);
+      console.log("Publishing results on-chain...");
+      await tx.wait();
+      console.log("Transaction confirmed");
+  
+      await updateDoc(doc(db, "petitions", petitionId), {
+        active: false
+      });
+  
+      setPetitions((prev) =>
+        prev.map((p) =>
+          p.id === petitionId ? { ...p, active: false } : p
+        )
+      );
+      alert("Results published!");
+    } catch (err) {
+      console.error("Error publishing results:", err);
+  
+      // Extract revert reason
+      let message = "Failed to publish results.";
+      if (err?.error?.data?.message) {
+        const match = err.error.data.message.match(/reverted with reason string '(.*?)'/);
+        if (match && match[1]) {
+          message = match[1];
+        }
+      } else if (err?.reason) {
+        message = err.reason;
+      }
+  
+      alert(message);
+    } finally {
+      setPublishingId(null);
+    }
+  };
+  
 
   return (
     <div style={{ maxWidth: "600px", margin: "0 auto", textAlign: "left" }}>
@@ -195,6 +253,7 @@ function AllPetitions() {
           {activePetitions.map((petition) => (
             <li key={petition.id}>
               <div
+              	onClick={()=> toggleExpand(petition.id)}
                 style={{
                   marginBottom: "0.5rem",
                   padding: "1rem",
@@ -203,11 +262,19 @@ function AllPetitions() {
                   fontWeight: "bold",
                   cursor: "pointer"
                 }}
-                onClick={() => handlePetitionClick(petition)} // Handle petition click
-              >
+                >
                 {petition.title}
                 {/* Show approval/disapproval buttons if not signed */}
-                {!petition.signedBy || !petition.signedBy.includes(getAuth().currentUser?.uid) ? (
+                {expandedId === petition.id && (
+                <div className="card" style={{ marginBottom: "1rem" }}>
+                  <p><strong>Description:</strong> {petition.description}</p>
+                  <p><strong>Created:</strong> {petition.createdAt?.toDate().toLocaleString() || "N/A"}</p>
+
+                  {/* Options and Votes */}
+                  <div style={{ marginTop: "1rem", textAlign: "left" }}>
+                    <ul style={{ paddingLeft: "1rem" }}>
+                      {/* Static options: Approve, Disapprove */}
+                      {!petition.signedBy || !petition.signedBy.includes(credentialHash) ? (
                   <div style={{ marginTop: "1rem" }}>
                     <button
                       onClick={() => handleVote(petition, "Approve")}
@@ -224,6 +291,25 @@ function AllPetitions() {
                     <strong>You have already signed this petition.</strong>
                   </div>
                 )}
+                    </ul>
+                  </div>
+
+                  {/* Status and Publish Results */}
+                  <p>
+                    Status:{" "}
+                    <strong style={{ color: petition.active ? "green" : "gray" }}>
+                      {petition.active ? "Active" : "Completed"}
+                    </strong>
+                  </p>
+
+                  {petition.active && (
+                    <button onClick={() => publishResults(petition.id)}>
+                      Publish Results
+                    </button>
+                  )}
+                </div>
+              )}
+                
               </div>
             </li>
           ))}
