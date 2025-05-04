@@ -7,8 +7,8 @@ import { ethers } from "ethers";
 
 import { AuthContext } from "../context/AuthContext";
 
-import PetitionContractABI from "../abis/PetitionContract.json"; 
-const CONTRACT_ADDRESS = "0xc977f4bf7ca81e3e9f3117353a06cd8814958ad7"; 
+import PetitionContractABI from "../../build/contracts/PetitionContract.json"; 
+const CONTRACT_ADDRESS = "0x9938F289ae23301b4286847DCe55E916f8D9E892"; 
 
 
 function AllPetitions() {
@@ -24,6 +24,7 @@ function AllPetitions() {
 
   useEffect(() => {
     const fetchAndVerifyPetitions = async () => {
+      console.log("enter verify petitions ");
       try {
         const petitionsRef = collection(db, "petitions");
         const querySnapshot = await getDocs(petitionsRef);
@@ -32,16 +33,17 @@ function AllPetitions() {
           id: docSnap.id,
           ...docSnap.data(),
         }));
-
+        console.log("petition ids retrieved from firebase ");
         const provider = new ethers.providers.Web3Provider(window.ethereum);
         const signer = provider.getSigner();
         const contract = new ethers.Contract(
           CONTRACT_ADDRESS,
-          PetitionContractABI,
+          PetitionContractABI.abi,
           signer
         );
 
         const onChainIdsBytes32 = await contract.getAllPetitionIds();
+        console.log("got all petition ids");
     const onChainIds = onChainIdsBytes32.map(id => ethers.utils.parseBytes32String(id));
 
     // 2. Firebase vs On-chain count check
@@ -59,7 +61,7 @@ function AllPetitions() {
         await deleteDoc(doc(db, "petitions", petition.id));
       }
     }
-
+    console.log("check of extra petitions done");
     // 4. Alert if extra (deleted) Firebase petitions found
     if (deletedIds.length > 0) {
       alert(`🗑️ ${deletedIds.length} extra petition(s) deleted from Firebase because they no longer exist on-chain:\n\n${deletedIds.join("\n")}`);
@@ -152,7 +154,7 @@ function AllPetitions() {
       const provider = new ethers.providers.Web3Provider(window.ethereum);
       await provider.send("eth_requestAccounts", []);
       const signer = provider.getSigner();
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, PetitionContractABI, signer);
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, PetitionContractABI.abi, signer);
       const petitionIdBytes = ethers.utils.formatBytes32String(petition.id);
   
       const approve = voteType === "Approve";
@@ -198,7 +200,7 @@ function AllPetitions() {
   
       const provider = new ethers.providers.Web3Provider(window.ethereum);
       const signer = provider.getSigner();
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, PetitionContractABI, signer);
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, PetitionContractABI.abi, signer);
   
       const petitionIdBytes32 = ethers.utils.formatBytes32String(petitionId);
   

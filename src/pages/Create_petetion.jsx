@@ -6,8 +6,8 @@ import { collection, addDoc, serverTimestamp,setDoc,doc } from "firebase/firesto
 import { ethers } from "ethers";
 import { AuthContext } from "../context/AuthContext";
 
-import PetitionContractABI from "../abis/PetitionContract.json";
-const CONTRACT_ADDRESS = "0xc977f4bf7ca81e3e9f3117353a06cd8814958ad7";
+import PetitionContractABI from "../../build/contracts/PetitionContract.json"; 
+const CONTRACT_ADDRESS = "0x9938F289ae23301b4286847DCe55E916f8D9E892"; 
 
 function CreatePetition() {
   const [title, setTitle] = useState("");
@@ -16,7 +16,7 @@ function CreatePetition() {
   const [deadline, setDeadline] = useState("");
   const [maxVotes, setMaxVotes] = useState("");
 
-  const { walletAddress, credentialHash } = useContext(AuthContext);
+  const { walletAddress } = useContext(AuthContext);
   console.log(walletAddress);
 
   const handleSubmit = async (e) => {
@@ -36,7 +36,7 @@ function CreatePetition() {
         title,
         description,
         // createdAt,
-        createdBy: credentialHash,
+        createdBy: walletAddress,
       });
 
       // Step 2: Generate random Firebase-style ID for petition
@@ -61,7 +61,7 @@ function CreatePetition() {
         title,
         description,
         // createdAt: serverTimestamp(),
-        createdBy: credentialHash,
+        createdBy: walletAddress,
         options,
         votes: initialVotes,
         active: true,
@@ -95,7 +95,7 @@ function CreatePetition() {
     if (!window.ethereum) throw new Error("MetaMask is not installed.");
     const provider = new ethers.providers.Web3Provider(window.ethereum);
     const signer = provider.getSigner();
-    const contract = new ethers.Contract(CONTRACT_ADDRESS, PetitionContractABI, signer);
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, PetitionContractABI.abi, signer);
     const petitionIdBytes32 = ethers.utils.formatBytes32String(petitionId);
     const tx = await contract.createPetition(petitionIdBytes32, hash,deadlineTimestamp);
     await tx.wait();
@@ -105,7 +105,7 @@ function CreatePetition() {
   const verifyHashOnBlockchain = async (petitionId, hash) => {
     const provider = new ethers.providers.Web3Provider(window.ethereum);
     const signer = provider.getSigner();
-    const contract = new ethers.Contract(CONTRACT_ADDRESS, PetitionContractABI, signer);
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, PetitionContractABI.abi, signer);
     const petitionIdBytes32 = ethers.utils.formatBytes32String(petitionId);
     const storedHash = await contract.getPetitionHash(petitionIdBytes32);
     console.log("verifying hash:", hash)

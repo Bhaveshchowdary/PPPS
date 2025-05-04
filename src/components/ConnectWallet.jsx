@@ -28,6 +28,7 @@ function ConnectWallet() {
   const handleSIWEConnect = async () => {
     const address = await signInWithEthereum();
     if (!address) setShowAlert(true);
+    navigate('/home');
   };
 
   const handleLogout = async () => {
@@ -140,11 +141,11 @@ function ConnectWallet() {
           {walletAddress
             ? `Wallet Connected: ${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`
             : 'Connect Wallet'}
-        </button>
+          </button>
         <p>Connect MetaMask wallet to enter petition system</p>
       </div>
 
-      <div style={styles.card}>
+      {/* <div style={styles.card}>
         <label style={styles.fileLabel}>
           Upload your credentials
           <input
@@ -177,7 +178,7 @@ function ConnectWallet() {
             ? 'You already have credentials. Proceed to home.'
             : 'Upload your credentials JSON file to continue'}
         </p>
-      </div>
+      </div> */}
 
       {showAlert && (
         <div style={styles.alert}>
